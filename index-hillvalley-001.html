@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+        <title>Babylon.js sample code</title>
+
+        <!-- Babylon.js -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+        <script src="https://assets.babylonjs.com/generated/Assets.js"></script>
+        <script src="https://cdn.babylonjs.com/recast.js"></script>
+        <script src="https://cdn.babylonjs.com/ammo.js"></script>
+        <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+        <script src="https://cdn.babylonjs.com/cannon.js"></script>
+        <script src="https://cdn.babylonjs.com/Oimo.js"></script>
+        <script src="https://cdn.babylonjs.com/earcut.min.js"></script>
+        <script src="https://cdn.babylonjs.com/babylon.js"></script>
+        <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+        <script src="https://cdn.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+        <script src="https://cdn.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+        <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+        <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+        <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+        <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+        <style>
+            html, body {
+                overflow: hidden;
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            #renderCanvas {
+                width: 100%;
+                height: 100%;
+                touch-action: none;
+            }
+            
+            #canvasZone {
+                width: 100%;
+                height: 100%;
+            }
+        </style>
+    </head>
+<body>
+    <div id="canvasZone"><canvas id="renderCanvas"></canvas></div>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+
+        var startRenderLoop = function (engine, canvas) {
+            engine.runRenderLoop(function () {
+                if (sceneToRender && sceneToRender.activeCamera) {
+                    sceneToRender.render();
+                }
+            });
+        }
+
+        var engine = null;
+        var scene = null;
+        var sceneToRender = null;
+        var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
+        // Cardboard teleporter - work in progress
+
+var createScene = function () {
+    var scene = new BABYLON.Scene(engine);
+    var camera = new BABYLON.ArcRotateCamera("cam", -Math.PI / 2, Math.PI / 4, 10, BABYLON.Vector3.Zero());
+    var anchor = new BABYLON.TransformNode("");
+
+    camera.wheelDeltaPercentage = 0.01;
+    camera.attachControl(canvas, true);
+
+    // This targets the camera to scene origin
+    camera.setTarget(BABYLON.Vector3.Zero());
+
+    // This attaches the camera to the canvas
+    camera.attachControl(canvas, true);
+
+
+    // Materiale Giallo
+    yellowMaterial = new BABYLON.StandardMaterial("yellowMaterial", scene);
+    yellowMaterial.diffuseColor = new BABYLON.Color3(1, 1, 0); // Giallo
+
+
+    
+    originalMaterial = [];
+
+    WALKABLE_MESH = "Road1"; // "Road1" for hill valley, else "ground"
+    teleportIndex = 0;
+
+    // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
+    var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+
+    // Default intensity is 1. Let's dim the light a small amount
+    light.intensity = 0.7;
+
+    // Our built-in 'sphere' shape.
+    var sphere = BABYLON.MeshBuilder.CreateSphere("sphere1", {diameter: 2, segments: 32}, scene);
+
+ 
+    // Move the sphere upward 1/2 its height
+    sphere.position.y = 1;
+    sphere.position.x = 1;
+
+    // Our built-in 'ground' shape.
+    var ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 20, height: 20}, scene);
+
+    ////////// Interface
+        var plane = BABYLON.MeshBuilder.CreatePlane("plane",  {
+            size: 14,
+            updatable: true,
+        },  scene)
+
+        var textureResolution = 1024;
+        texturePlane = new BABYLON.DynamicTexture("dynamic texture", {width:textureResolution, height:textureResolution}, scene);   
+        var textureContext = texturePlane.getContext();
+        plane.position=new BABYLON.Vector3(2,2,2);
+        plane.rotation=new BABYLON.Vector3(0, 0, 0);
+        var materialPlane = new BABYLON.StandardMaterial("Mat", scene);    				
+        materialPlane.diffuseTexture = texturePlane;
+        plane.material = materialPlane;    
+        var font = "bold 44px monospace";
+        texturePlane.drawText("Debug panel", 75, 220, font, "white", "black", true, true);
+
+    BABYLON.SceneLoader.Append("https://www.babylonjs.com/Scenes/hillvalley/",
+        "HillValley.babylon", scene, async function () {
+            scene.activeCamera.attachControl(canvas, false);
+           var xr = await scene.createDefaultXRExperienceAsync(  {
+                    floorMeshes: [
+                        scene.getMeshByName("Road1"), 
+                        scene.getMeshByName("Herbe1")]
+                }
+            ).then((xrHelp) => {
+        xrHelp.baseExperience.sessionManager.onXRSessionInit.add((xrs) => {
+            console.log("init",xrs)
+
+            if (xrHelp.baseExperience.sessionManager.controllers) {
+                // Fai qualcosa con i controllers
+                console.log("Number of controllers:", xrs.controllers.length);
+            } else {
+                console.log("no controllers")
+            }
+        }); // session Init
+
+    // Aggiungi un gestore di eventi per l'evento pointerdown sulla finestra
+    window.addEventListener("pointerdown", function (event) {
+            textBlock.text=event.pointerType;   
+        // Verifica se l'evento è stato generato da un tocco sullo schermo
+        if (event.isPrimary && ((event.pointerType === "touch") || (event.pointerType === "mouse"))) {
+            textBlock.text="touch!"
+            console.log("touch!")
+            console.log("Prev:", xrHelp.baseExperience.camera.position)
+            console.log("New: ", scene.meshes[teleportIndex].position)
+            // Modifica la posizione della telecamera (visore) quando l'utente tocca lo schermo
+            xrHelp.baseExperience.camera.position.x = scene.meshes[teleportIndex].position.x;
+            //xrHelp.baseExperience.camera.position.y = scene.meshes[teleportIndex].position.y;
+            xrHelp.baseExperience.camera.position.z = scene.meshes[teleportIndex].position.z;
+
+        }
+    });
+
+    window.addEventListener("pointerup", function (event) {
+            textBlock.text=event.pointerType;   
+        // Verifica se l'evento è stato generato da un tocco sullo schermo
+        if (event.isPrimary && ((event.pointerType === "touch") || (event.pointerType === "mouse"))) {
+            // Modifica la posizione della telecamera (visore) quando l'utente tocca lo schermo
+            //xrHelp.baseExperience.camera.position = new BABYLON.Vector3(x, y, z);
+            textBlock.text="Button"
+            //console.log("untouch!")
+        }
+    });
+
+    });;
+           xr.baseExperience.sessionManager.onXRFrameObservable.addOnce(() => {
+               // set the height at the first frame
+               xr.baseExperience.camera.position.y += 1;
+           })
+        });
+
+        // Creare una stringa con l'elenco delle mesh
+console.log("Meshes in this scene:");
+        for (var i = 0; i < scene.meshes.length; i++) {
+            originalMaterial[i] = scene.meshes[i].material;
+console.log(i, scene.meshes[i].name);            
+        }
+
+
+
+        // Create the 3D UI manager
+        var manager = new BABYLON.GUI.GUI3DManager(scene);
+
+        var panel = new BABYLON.GUI.PlanePanel();
+        panel.margin = 0.1;
+
+        manager.addControl(panel);
+        panel.linkToTransformNode(anchor);
+        panel.position.z = +1.5;
+        panel.position.x = +3;
+        panel.position.y = +2;
+
+        panel.blockLayout = true;
+        var button = new BABYLON.GUI.HolographicButton("btn1");
+        panel.addControl(button);
+        var textBlock = new BABYLON.GUI.TextBlock();
+        textBlock.text = "Button 1"; // Sostituisci con il testo desiderato
+        textBlock.color = "white"; // Specifica il colore del testo
+        textBlock.fontSize = 44; // Imposta la dimensione del carattere (puoi regolarla a tuo piacimento)
+        button.content = textBlock;    
+        button.onPointerEnterObservable.add(function() {
+            textBlock.text = "Cliccami!";
+        });
+
+        button.onPointerOutObservable.add(function() {
+            textBlock.text = "Button";
+        });
+
+        button.onPointerDownObservable.add(function() {
+            textBlock.text = "Down";
+        });
+
+
+        button.onPointerClickObservable.add(function() {
+            textBlock.text = "Click!";
+            texturePlane.drawText("Button clicked", 85, 220, "20px monospace", "white", "black", true, true);        
+        });
+
+
+        var button2 = new BABYLON.GUI.HolographicButton("btn2");
+        panel.addControl(button2);
+        button2.text = "Button2"
+        panel.blockLayout = false;
+        textBlock2 = new BABYLON.GUI.TextBlock();
+        textBlock2.text = "Button 2"; // Sostituisci con il testo desiderato
+        textBlock2.color = "white"; // Specifica il colore del testo
+        textBlock2.fontSize = 44; // Imposta la dimensione del carattere (puoi regolarla a tuo piacimento)
+        button2.content = textBlock2;   
+//////////
+
+
+ /*   scene.createDefaultXRExperienceAsync({}).then((xrHelp) => {
+        xrHelp.baseExperience.sessionManager.onXRSessionInit.add((xrs) => {
+            console.log("init",xrs)
+
+            if (xrHelp.baseExperience.sessionManager.controllers) {
+                // Fai qualcosa con i controllers
+                console.log("Number of controllers:", xrs.controllers.length);
+            } else {
+                console.log("no controllers")
+            }
+        }); // session Init
+
+    // Aggiungi un gestore di eventi per l'evento pointerdown sulla finestra
+    window.addEventListener("pointerdown", function (event) {
+            textBlock.text=event.pointerType;   
+        // Verifica se l'evento è stato generato da un tocco sullo schermo
+        if (event.isPrimary && ((event.pointerType === "touch") || (event.pointerType === "mouse"))) {
+            textBlock.text="touch!"
+            console.log("touch!")
+            console.log("Prev:", xrHelp.baseExperience.camera.position)
+            console.log("New: ", scene.meshes[teleportIndex].position)
+            // Modifica la posizione della telecamera (visore) quando l'utente tocca lo schermo
+            xrHelp.baseExperience.camera.position.x = scene.meshes[teleportIndex].position.x;
+            //xrHelp.baseExperience.camera.position.y = scene.meshes[teleportIndex].position.y;
+            xrHelp.baseExperience.camera.position.z = scene.meshes[teleportIndex].position.z;
+
+        }
+    });
+
+    window.addEventListener("pointerup", function (event) {
+            textBlock.text=event.pointerType;   
+        // Verifica se l'evento è stato generato da un tocco sullo schermo
+        if (event.isPrimary && ((event.pointerType === "touch") || (event.pointerType === "mouse"))) {
+            // Modifica la posizione della telecamera (visore) quando l'utente tocca lo schermo
+            //xrHelp.baseExperience.camera.position = new BABYLON.Vector3(x, y, z);
+            textBlock.text="Button"
+            //console.log("untouch!")
+        }
+    });
+
+    }); // then
+*/
+
+
+	scene.registerBeforeRender(function () {
+        var i = 0;
+        scene.meshes.forEach((m) => {            
+            //m.material = originalMaterial[i]
+            if (m.name === "torusTeleportation") {
+                teleportIndex = i;
+                m.isVisible=true;
+            }
+            i++;
+        })
+        RayCastCheck();
+    });  
+    return scene;
+};
+
+
+    function checkMesh(mesh) {
+        if (
+            (mesh.name !== "teleportationTarget") &&
+            (mesh.name !== "rotationCone") &&
+            (mesh.name !== "torusTeleportation") &&
+            (mesh.name !== "gazeTracker") &&
+            (mesh.name !== "selection") &&
+            (mesh.name !== "laserPointer") 
+        )   {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+
+    function vecToLocal(vector, mesh){
+        var m = mesh.getWorldMatrix();
+        var v = BABYLON.Vector3.TransformCoordinates(vector, m);
+        return v;		 
+    }
+
+    function RayCastCheck()    {
+        var c = scene.activeCamera;
+        var origin = c.position;
+        var forward = new BABYLON.Vector3(0,0,1);		
+	    forward = vecToLocal(forward, c);
+        var direction = forward.subtract(origin);
+	    direction = BABYLON.Vector3.Normalize(direction);
+        ray = new BABYLON.Ray(origin, direction, 100);	
+        hit = scene.pickWithRay(ray,checkMesh);
+        
+
+        //Check for Condition
+        if (hit.pickedMesh)  {
+            //hit.pickedMesh.material = yellowMaterial;
+            if (hit.pickedMesh.name == WALKABLE_MESH) {
+                if(hit.pickedPoint) {
+                    var myPos = hit.pickedPoint.x.toFixed(1) + "," + hit.pickedPoint.y.toFixed(1) + "," + hit.pickedPoint.z.toFixed(1)
+                    scene.meshes[teleportIndex].position = hit.pickedPoint;                
+                }   
+            }        
+            textBlock2.text = hit.pickedMesh.name
+            texturePlane.drawText( hit.pickedMesh.name + "(" + myPos + ")", 225, 250, "80px monospace", "white", "black", true, true);        
+console.log("Looking at ", hit.pickedMesh.name)            
+        } else {
+//
+        }
+    }
+                window.initFunction = async function() {
+                    
+                    
+                    
+                    var asyncEngineCreation = async function() {
+                        try {
+                        return createDefaultEngine();
+                        } catch(e) {
+                        console.log("the available createEngine function failed. Creating the default engine instead");
+                        return createDefaultEngine();
+                        }
+                    }
+
+                    window.engine = await asyncEngineCreation();
+        if (!engine) throw 'engine should not be null.';
+        startRenderLoop(engine, canvas);
+        window.scene = createScene();};
+        initFunction().then(() => {sceneToRender = scene                    
+        });
+
+        // Resize
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>
